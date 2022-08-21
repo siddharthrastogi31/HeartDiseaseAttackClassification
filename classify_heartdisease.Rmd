@@ -1,0 +1,113 @@
+---
+title: "Classification model for heart attack"
+author: "Siddharth Rastogi"
+date: '2022-08-21'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Heart-related diseases are among the most prevalent chronic diseases in the United States. Preventive identification of at-risk subjects and of the factors associated to hearth-related conditions is paramount for effective prevention of negative outcomes (like hearth attacks) and testing.
+The Behavioral Risk Factor Surveillance System (BRFSS) is a health-related survey that collects state data about U.S. residents regarding their health-related risk behaviors, chronic health conditions, and use of preventive services. The dataset data_heart_disease_BRFSS2015.csv contains records for 253,680 respondents of the survey. For each subject, information is available on whether the subject had a heart-related disease (HeartDiseaseorAttack), and additional information including general behavior, demographic characteristics, self-reported health status, and disease history.
+More information is available at the link ‘https://www.kaggle.com/alexteboul/heart-disease-health-indicators-
+dataset‘.
+
+```{r}
+data <- read.csv("data_heart_disease_BRFSS2015.csv")
+# make sure that binary/categorical variables are correctly encoded as factor
+data[,c(1:4,6:14,18:19)] <- lapply( data[,c(1:4,6:14,18:19)], factor )
+str(data)
+```
+
+Below code is used to check if classes are balanced or not, it shows that classes are highly imbalanced.
+
+```{r}
+# classes are highly imbalanced
+table(data$HeartDiseaseorAttack)
+```
+
+
+```{r}
+table(data$HeartDiseaseorAttack)/nrow(data)
+```
+
+```{r}
+fit <- glm(HeartDiseaseorAttack ~ ., data = data, family = "binomial")
+```
+
+
+```{r}
+summary(fit)
+```
+
+
+```{r}
+tau <- 0.5
+p <- fitted(fit)
+pred <- ifelse(p > tau, 1, 0)
+```
+
+```{r}
+# cross tabulation between observed and predicted
+table(data$HeartDiseaseorAttack, pred)
+```
+
+```{r}
+# compute accuracy for given tau
+tab <- table(data$HeartDiseaseorAttack, pred)
+sum(diag(tab))/sum(tab)
+```
+
+Different measures for assessing the predictive performance of the logistic regression model can be computed for varying values of the discrimination threshold tau. Package ROCR can be used to calculate many performance measures.
+To use the functionalities of the package, we first need to create a prediction object, providing in input the estimated probabilities and the actual class values of the response variable.
+
+```{r}
+library(ROCR)
+pred_obj <- prediction(fitted(fit), data$HeartDiseaseorAttack)
+```
+
+
+```{r}
+perf <- performance(pred_obj, "tpr", "fpr")
+plot(perf)
+abline(0,1, col = "darkorange2", lty = 2)
+```
+
+```{r}
+# compute the area under the ROC curve
+auc <- performance(pred_obj, "auc")
+auc@y.values
+```
+
+
+
+```{r}
+sens <- performance(pred_obj, "sens")
+spec <- performance(pred_obj, "spec")
+tau <- sens@x.values[[1]]
+sens_spec <- sens@y.values[[1]] + spec@y.values[[1]]
+best <- which.max(sens_spec)
+plot(tau, sens_spec, type = "l")
+points(tau[best], sens_spec[best], pch = 19, col = adjustcolor("darkorange2", 0.5))
+```
+
+```{r}
+tau[best] # optimal tau
+```
+
+```{r}
+# classification for optimal tau
+pred <- ifelse(fitted(fit) > tau[best], 1, 0)
+table(data$HeartDiseaseorAttack, pred)
+```
+
+```{r}
+# accuracy for optimal tau
+acc <- performance(pred_obj, "acc")
+acc@y.values[[1]][best]
+```
+
+
